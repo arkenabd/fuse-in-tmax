@@ -7,6 +7,7 @@ import org.apache.camel.model.dataformat.JsonLibrary;
 import org.apache.camel.spring.Main;
 import org.springframework.stereotype.Component;
 
+import com.netty.fuse.util.ExtRequest;
 import com.netty.fuse.util.PojoJson;
 import com.netty.fuse.util.UserPojoReq;
 import com.netty.fuse.util.UserPojoReq2;
@@ -19,6 +20,27 @@ public class ServerRoute extends RouteBuilder {
 	@Override
 	public void configure() throws Exception {
 		String user_id="";
+		
+		restConfiguration()
+			.component("restlet").port("8080").scheme("http")
+	;
+	
+	rest().path("/poc")
+		.post().id("poc").consumes("application/json")
+			.responseMessage().code(200).message("Successfully requested").endResponseMessage()
+			.to("direct:poc")
+		;
+		from("direct:poc")
+			.log("Received request ${body}")
+			.log("Accessing TMAX . . . .")
+			.removeHeaders("Camel*")
+			.setHeader(Exchange.CONTENT_TYPE, constant("application/json"))
+			.setHeader(Exchange.HTTP_QUERY, simple("authUsername=pocuser&authPassword=poc2020&authMethod=Basic&httpClient.authenticationPreemptive=true"))
+			.log("${headers}")
+			.to("http4://api.caphstar.com:8001/ciopenapi/v1/connector/tmax/1")
+			.log("Received response from TMAX: ${body}")
+		;
+		
 		from("netty:tcp://0.0.0.0:7000?textline=true&sync=true&requestTimeout=10000&allowDefaultCodec=false&encoder=#stringEncoder&decoder=#stringDecoder")
 				// from("timer:1")
 		
@@ -29,6 +51,7 @@ public class ServerRoute extends RouteBuilder {
 				  .process(new Processor() {
 				     public void process(Exchange exchange) throws Exception {
 				        System.out.println(exchange.getProperty("user_id_prop"));
+				        
 				        System.out.println(exchange.getProperty("nik_prop"));
 				    }
 				})
@@ -36,7 +59,8 @@ public class ServerRoute extends RouteBuilder {
 				.setHeader(Exchange.HTTP_METHOD, constant("POST"))
 				.setHeader(Exchange.CONTENT_TYPE, constant("application/json"))
 				
-				.to("http4://fuse-dum-dukcapil-middleware.apps.hanabank.co.id/dukcapil/reg").unmarshal().json(JsonLibrary.Gson, UserPojoReq.class)
+				.to("http4://fuse-dum-dukcapil-middleware.apps.hanabank.co.id/dukcapil/reg")
+//				.unmarshal().json(JsonLibrary.Gson, UserPojoReq.class)
 //				.to("http4://localhost:7070/dukcapil/reg")
 				.unmarshal().json(JsonLibrary.Gson, UserPojoResp.class)
 				.log("Body IN : (${body})")
